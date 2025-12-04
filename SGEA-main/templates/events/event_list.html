@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Eventos</h2>
+
+{% if user.is_authenticated and user.profile.role == 'organizador' %}
+  <a class="btn btn-primary mb-3" href="{% url 'create_event' %}">Novo evento</a>
+{% endif %}
+
+<div class="list-group">
+  {% for e in events %}
+    <a class="list-group-item list-group-item-action" href="{% url 'event_detail' e.id %}">
+      <div class="d-flex w-100 justify-content-between">
+        <b>{{ e.title }}</b>
+        <small>{{ e.start_date }} → {{ e.end_date }}</small>
+      </div>
+      <small>{{ e.get_event_type_display }} — {{ e.place }}</small>
+    </a>
+
+    {% if user.is_authenticated and user.profile.role == 'organizador' %}
+      <div class="px-3 py-2 border-bottom bg-light">
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'report_event_regs' e.id %}">Relatório</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'report_event_regs_csv' e.id %}">CSV</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'report_event_regs_pdf' e.id %}">PDF</a>
+      </div>
+    {% endif %}
+  {% empty %}
+    <p>Nenhum evento cadastrado.</p>
+  {% endfor %}
+</div>
+{% endblock %}

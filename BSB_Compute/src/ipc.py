@@ -1,11 +1,9 @@
-def enviar_tarefa(queue, tarefa):
-    queue.put(tarefa)
+# ipc.py
+def enviar_tarefa(fila, msg):
+    fila.put(msg)
 
-def receber_resposta(queue, block=True, timeout=None):
+def receber_resposta(fila, block=False, timeout=0.01):
     try:
-        if block:
-            return queue.get(timeout=timeout)
-        else:
-            return queue.get_nowait()
-    except Exception:
+        return fila.get(block=block, timeout=timeout)
+    except:
         return None

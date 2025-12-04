@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% load static %}
+
+{% block title %}SGEA - Sistema de Gestão de Eventos Acadêmicos{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section" aria-labelledby="hero-title">
+  <div class="container">
+    <img src="{% static 'logo.jpg' %}" alt="Logo SGEA" height="80" class="mb-3 rounded">
+    <h1 id="hero-title">Sistema de Gestão de Eventos Acadêmicos</h1>
+    <p class="lead">Organize, gerencie e participe de eventos acadêmicos de forma simples e eficiente.</p>
+    <div class="mt-4">
+      <a class="btn btn-light btn-lg me-2" href="{% url 'event_list' %}">
+        <i class="bi bi-calendar-event me-2"></i>Ver Eventos
+      </a>
+      {% if not user.is_authenticated %}
+      <a class="btn btn-outline-light btn-lg" href="{% url 'signup' %}">
+        <i class="bi bi-person-plus me-2"></i>Criar Conta
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- Features Section -->
+<section class="py-5" aria-labelledby="features-title">
+  <h2 id="features-title" class="text-center mb-5">
+    <i class="bi bi-stars text-primary me-2"></i>Funcionalidades
+  </h2>
+
+  <div class="row g-4">
+    <!-- Card Eventos -->
+    <div class="col-md-4">
+      <div class="card h-100 text-center p-4">
+        <div class="card-body">
+          <i class="bi bi-calendar-check display-4 text-primary mb-3"></i>
+          <h3 class="card-title h5">Gestão de Eventos</h3>
+          <p class="card-text text-muted">
+            Cadastre palestras, workshops, cursos e congressos. Gerencie inscrições e capacidade.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card Inscrições -->
+    <div class="col-md-4">
+      <div class="card h-100 text-center p-4">
+        <div class="card-body">
+          <i class="bi bi-people display-4 text-primary mb-3"></i>
+          <h3 class="card-title h5">Inscrições Online</h3>
+          <p class="card-text text-muted">
+            Inscreva-se em eventos com poucos cliques. Acompanhe suas participações.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card Certificados -->
+    <div class="col-md-4">
+      <div class="card h-100 text-center p-4">
+        <div class="card-body">
+          <i class="bi bi-award display-4 text-primary mb-3"></i>
+          <h3 class="card-title h5">Certificados Digitais</h3>
+          <p class="card-text text-muted">
+            Receba certificados automaticamente após confirmação de presença.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Próximos Eventos -->
+{% if upcoming_events %}
+<section class="py-5 bg-light rounded-lg" aria-labelledby="upcoming-title">
+  <h2 id="upcoming-title" class="text-center mb-4">
+    <i class="bi bi-calendar2-week text-primary me-2"></i>Próximos Eventos
+  </h2>
+
+  <div class="row g-4">
+    {% for event in upcoming_events %}
+    <div class="col-md-6">
+      <div class="card event-card h-100">
+        <div class="card-body d-flex">
+          <div class="event-date me-3">
+            <span class="day">{{ event.start_date|date:"d" }}</span>
+            <span class="month">{{ event.start_date|date:"M" }}</span>
+          </div>
+          <div class="flex-grow-1">
+            <h5 class="card-title">{{ event.title }}</h5>
+            <p class="card-text text-muted mb-2">
+              <i class="bi bi-geo-alt me-1"></i>{{ event.place }}
+            </p>
+            <a href="{% url 'event_detail' event.id %}" class="btn btn-sm btn-outline-primary">
+              Ver detalhes
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="text-center mt-4">
+    <a href="{% url 'event_list' %}" class="btn btn-primary">
+      Ver todos os eventos <i class="bi bi-arrow-right ms-1"></i>
+    </a>
+  </div>
+</section>
+{% endif %}
+
+<!-- Stats Section -->
+<section class="py-5 text-center" aria-labelledby="stats-title">
+  <h2 id="stats-title" class="visually-hidden">Estatísticas do Sistema</h2>
+  <div class="row">
+    <div class="col-md-4">
+      <div class="display-4 text-primary fw-bold">
+        <i class="bi bi-calendar-event"></i>
+      </div>
+      <p class="h5 mt-2">Eventos Organizados</p>
+    </div>
+    <div class="col-md-4">
+      <div class="display-4 text-primary fw-bold">
+        <i class="bi bi-people-fill"></i>
+      </div>
+      <p class="h5 mt-2">Participantes Cadastrados</p>
+    </div>
+    <div class="col-md-4">
+      <div class="display-4 text-primary fw-bold">
+        <i class="bi bi-award-fill"></i>
+      </div>
+      <p class="h5 mt-2">Certificados Emitidos</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

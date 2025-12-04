@@ -1,55 +1,34 @@
+# worker.py
 import time
-import psutil
-from multiprocessing import Process
-from queue import Empty
+import random
 
-
-def simular_metricas(work):
-    cpu = min(100, work * 15)     # Simulação simples
-    ram = 20 + (work * 2.0)
-    return cpu, ram
-
-
-def worker_loop(worker_id, fila_entrada, fila_retorno):
-    proc = psutil.Process()
-
+def worker_loop(wid, capacidade, inbox, retorno):
+    """
+    Worker processa fatias (time slice).
+    'capacidade' influencia a velocidade: cada slot é processado normalmente,
+    mas servidores mais fortes executam a slice mais rapidamente.
+    """
     while True:
-        try:
-            msg = fila_entrada.get(timeout=0.2)
-        except Empty:
-            continue
-
-        if not isinstance(msg, dict):
-            break
-        if msg.get("EXIT", False) or msg == "EXIT":
+        msg = inbox.get()
+        if msg == "EXIT":
             break
 
-        if "slice" in msg:
-            work = float(msg["slice"])
-            time.sleep(work)
-            remaining = msg["remaining"] - work
-        else:
-            work = float(msg["exec_time"])
-            time.sleep(work)
-            remaining = 0.0
+        task_id = msg["id"]
+        slice_amount = msg["slice"]
+        remaining = msg["remaining"]
 
-        cpu_sim, ram_sim = simular_metricas(work)
+        # velocidade aumenta conforme capacidade
+        exec_time = slice_amount / capacidade
 
-        fila_retorno.put({
-            "id": msg["id"],
-            "worker": worker_id,
-            "duration": work,
-            "remaining": max(0.0, remaining),
-            "cpu": cpu_sim,
-            "memory": ram_sim
+        time.sleep(exec_time)
+
+        new_remaining = max(0, remaining - slice_amount)
+
+        retorno.put({
+            "worker": wid,
+            "id": task_id,
+            "remaining": new_remaining,
+            "duration": exec_time,
+            "cpu": random.uniform(40, 95),
+            "memory": random.uniform(500, 1500)
         })
-
-
-def iniciar_workers(cfg, filas, retorno):
-    procs = []
-    for s in cfg:
-        sid = s["id"]
-        p = Process(target=worker_loop, args=(sid, filas[sid], retorno))
-        p.start()
-        procs.append(p)
-    return procs

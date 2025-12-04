@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Meus Certificados</h2>
+
+{% if certificates %}
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Evento</th>
+                <th>Data de Emissão</th>
+                <th>Código</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for certificate in certificates %}
+            <tr>
+                <td>{{ certificate.registration.event.title }}</td>
+                <td>{{ certificate.issued_at|date:"d/m/Y H:i" }}</td>
+                <td><code>{{ certificate.code }}</code></td>
+                <td>
+                    <a href="{% url 'download_certificate' certificate.id %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-download"></i> Baixar PDF
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+    Você ainda não possui certificados emitidos.
+    Participe de eventos e aguarde a confirmação de presença pelo organizador.
+</div>
+{% endif %}
+
+<a href="{% url 'home' %}" class="btn btn-secondary mt-3">Voltar</a>
+{% endblock %}

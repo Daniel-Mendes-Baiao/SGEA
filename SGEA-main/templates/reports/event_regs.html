@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>Inscritos — {{ event.title }}</h3>
+
+<div class="mb-2">
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'report_event_regs_csv' event.id %}">Baixar CSV</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'report_event_regs_pdf' event.id %}">Baixar PDF</a>
+</div>
+
+<table class="table table-sm">
+  <thead>
+    <tr>
+      <th>Usuário</th>
+      <th>Nome</th>
+      <th>E-mail</th>
+      <th>Inscrito em</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in regs %}
+      <tr>
+        <td>{{ r.user.username }}</td>
+        <td>{{ r.user.get_full_name }}</td>
+        <td>{{ r.user.email }}</td>
+        <td>{{ r.created_at|date:"d/m/Y H:i" }}</td>
+        <td>
+          <a class="btn btn-sm btn-outline-success" href="{% url 'issue_certificate' r.id %}">
+            Emitir
+          </a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5">Nenhum inscrito.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

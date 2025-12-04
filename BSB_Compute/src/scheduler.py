@@ -1,16 +1,21 @@
+# scheduler.py
 class Scheduler:
+    def __init__(self, policy):
+        self.policy = policy.lower()
 
-    def __init__(self, policy="prioridade"):
-        self.policy = policy
+    def reorder(self, ready):
+        if self.policy == "prioridade":
+            ready.sort(key=lambda x: x["prioridade"])  # 1 = alta
+        elif self.policy == "sjf":
+            ready.sort(key=lambda x: x["remaining"])   # menor job primeiro
+        # Round Robin não reordena
 
-    def reorder(self, fila):
-        if not fila:
-            return
+    def next_task(self, ready):
+        if not ready:
+            return None
 
-        if self.policy == "sjf":
-            fila.sort(key=lambda t: t["remaining"])
-        elif self.policy == "prioridade":
-            fila.sort(key=lambda t: t["prioridade"])
-
-    def next_task(self, fila):
-        return fila.pop(0)
+        if self.policy == "rr":
+            t = ready.pop(0)
+            return t
+        else:
+            return ready.pop(0)

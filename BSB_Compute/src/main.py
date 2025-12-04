@@ -1,160 +1,187 @@
-import json, time, os
-from multiprocessing import Queue
+# main.py
+import json
+import os
+import time
+import random
+from multiprocessing import Process, Queue
+
 from scheduler import Scheduler
-from worker import iniciar_workers
+from worker import worker_loop
 from ipc import enviar_tarefa, receber_resposta
 from utils import ts
 
 
 def carregar_config():
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config.json")
-    with open(path, "r", encoding="utf-8") as f:
+    base = os.path.dirname(os.path.abspath(__file__))
+    cfg = os.path.join(base, "..", "config.json")
+    cfg = os.path.abspath(cfg)
+
+    with open(cfg, "r") as f:
         return json.load(f)
 
 
-def prioridade_label(n):
-    return {1: "Alta", 2: "Média", 3: "Baixa"}.get(n, "?")
+def iniciar_workers(servidores):
+    filas = {}
+    processos = []
+    retorno = Queue()
+
+    for s in servidores:
+        q = Queue()
+        filas[s["id"]] = q
+        p = Process(target=worker_loop, args=(s["id"], s["capacidade"], q, retorno))
+        p.start()
+        processos.append(p)
+
+    return filas, retorno, processos
 
 
-def executar_politica(policy, cfg):
+def servidor_disponivel(estados):
+    for sid, st in estados.items():
+        for i in range(len(st["slots"])):
+            if st["slots"][i] is None:
+                return sid, i
+    return None, None
+
+
+def executar(policy, config):
+
     print("\n" + "=" * 60)
     print(f"=== INICIANDO SIMULAÇÃO: {policy.upper()} ===")
     print("=" * 60)
 
     start = time.time()
-    quantum = cfg["quantum"]
 
-    pending = [{
-        **r, "arrival_time": start, "remaining": r["tempo_exec"], "running": False
-    } for r in cfg["requisicoes"]]
+    tarefas = []
+    for req in config["requisicoes"]:
+        tarefas.append({
+            "id": req["id"],
+            "prioridade": req["prioridade"],
+            "remaining": req["tempo_exec"],
+            "arrival": random.uniform(0.1, 1.2),
+            "state": "NEW",
 
-    retorno = Queue()
-    filas = {s["id"]: Queue() for s in cfg["servidores"]}
-    estados = {s["id"]: {"cap": s["capacidade"], "load": 0, "busy": 0} for s in cfg["servidores"]}
+            "t_arrival": None,
+            "t_start": None,
+            "t_finish": None
+        })
 
-    iniciar_workers(cfg["servidores"], filas, retorno)
+    servidores = config["servidores"]
+
+    estados = {
+        s["id"]: {
+            "cap": s["capacidade"],
+            "slots": [None] * s["capacidade"],
+            "busy": 0
+        }
+        for s in servidores
+    }
+
+    filas, retorno, procs = iniciar_workers(servidores)
+
     scheduler = Scheduler(policy)
-    completed = {}
+    quantum = config["quantum"]
 
+    fila_global = []
+
+    # ========================= LOOP PRINCIPAL ==========================
     while True:
-        now = time.time()
-        elapsed = now - start
+        elapsed = time.time() - start
 
-        elegiveis = [t for t in pending if not t["running"] and t["remaining"] > 0]
-        scheduler.reorder(elegiveis)
-        livres = [sid for sid, st in estados.items() if st["load"] < st["cap"]]
+        # LIBERA CHEGADA
+        for t in tarefas:
+            if t["state"] == "NEW" and elapsed >= t["arrival"]:
+                t["state"] = "READY"
+                t["t_arrival"] = elapsed
+                fila_global.append(t)
 
-        # Atribuir tarefas
-        while elegiveis and livres:
-            t = scheduler.next_task(elegiveis)
-            sid = min(livres, key=lambda x: estados[x]["load"])
-            t["running"] = True
+                pr_txt = {1: "Alta", 2: "Média", 3: "Baixa"}[t["prioridade"]]
+                print(f"{ts(start)} Requisição {t['id']} ({pr_txt}) entrou na fila")
 
-            if t["id"] not in completed:
-                completed[t["id"]] = {"arrival": t["arrival_time"], "end": None}
+        # ORDENAR FILA PELA POLÍTICA
+        scheduler.reorder(fila_global)
 
-            msg = {"id": t["id"], "priority": t["prioridade"], "remaining": t["remaining"]}
-            if policy == "rr":
-                msg["slice"] = min(quantum, t["remaining"])
-            else:
-                msg["exec_time"] = t["remaining"]
+        # DESPACHAR SE HOUVER SLOT LIVRE
+        sid, slot = servidor_disponivel(estados)
+        while sid is not None and fila_global:
 
-            enviar_tarefa(filas[sid], msg)
-            estados[sid]["load"] += 1
+            t = scheduler.next_task(fila_global)
 
-            print(f"{ts(elapsed)} Requisição {t['id']} ({prioridade_label(t['prioridade'])}) "
-                  f"atribuída ao Servidor {sid} [{policy.upper()}]")
+            if t["t_start"] is None:
+                t["t_start"] = elapsed
 
-            livres = [sid for sid, st in estados.items() if st["load"] < st["cap"]]
+            enviar_tarefa(filas[sid], {
+                "id": t["id"],
+                "remaining": t["remaining"],
+                "slice": min(quantum, t["remaining"])
+            })
 
-        # Processar respostas
+            estados[sid]["slots"][slot] = t["id"]
+            t["state"] = "RUNNING"
+            t["server"] = sid
+
+            pr_txt = {1: "Alta", 2: "Média", 3: "Baixa"}[t["prioridade"]]
+            print(f"{ts(start)} Requisição {t['id']} ({pr_txt}) atribuída ao Servidor {sid} (slot {slot})")
+
+            sid, slot = servidor_disponivel(estados)
+
+        # RECEBER RESULTADOS DO WORKER
         while True:
-            resp = receber_resposta(retorno, block=False)
+            resp = receber_resposta(retorno)
             if not resp:
                 break
 
+            tid = resp["id"]
             sid = resp["worker"]
-            estados[sid]["busy"] += resp["duration"]
-            estados[sid]["load"] -= 1
+            duration = resp["duration"]
 
-            now2 = time.time()
-            elapsed2 = now2 - start
+            t = next(x for x in tarefas if x["id"] == tid)
 
-            for p in pending:
-                if p["id"] == resp["id"]:
-                    p["remaining"] = resp["remaining"]
-                    p["running"] = False
-                    p["arrival_time"] = now2
-                    break
+            estados[sid]["busy"] += duration
 
-            if resp["remaining"] == 0:
-                completed[resp["id"]]["end"] = now2
-                pending = [p for p in pending if p["id"] != resp["id"]]
-                print(f"{ts(elapsed2)} Servidor {sid} concluiu Requisição {resp['id']} "
-                      f"| CPU {resp['cpu']:.1f}% | RAM {resp['memory']:.1f}MB")
+            slot_index = estados[sid]["slots"].index(tid)
+            estados[sid]["slots"][slot_index] = None
+
+            t["remaining"] = resp["remaining"]
+
+            if t["remaining"] == 0:
+                t["state"] = "DONE"
+                t["t_finish"] = time.time() - start
+                print(f"{ts(start)} Servidor {sid} concluiu Requisição {tid}")
             else:
-                print(f"{ts(elapsed2)} Servidor {sid} preemptou Requisição {resp['id']} "
-                      f"(restante {resp['remaining']:.1f}s) "
-                      f"| CPU {resp['cpu']:.1f}% | RAM {resp['memory']:.1f}MB")
+                t["state"] = "READY"
+                fila_global.append(t)
 
-        if all(t["remaining"] == 0 for t in pending):
+        if all(t["state"] == "DONE" for t in tarefas):
             break
 
-        time.sleep(0.05)
+        time.sleep(0.02)
 
-    total = time.time() - start
+    # ========================= MÉTRICAS ==============================
+    total_time = time.time() - start
 
-    tempos = [(c["end"] - c["arrival"]) for c in completed.values()]
-    avg = sum(tempos) / len(tempos)
-    throughput = len(completed) / total
-    util = sum((st["busy"] / total) * 100 for st in estados.values()) / len(estados)
+    tempos_resposta = [(t["t_finish"] - t["t_arrival"]) for t in tarefas]
+    tempo_medio = sum(tempos_resposta) / len(tempos_resposta)
 
-    print("-" * 60)
-    print(f"Resultados da política: {policy.upper()}")
-    print(f"Tempo médio de resposta: {avg:.2f}s")
-    print(f"Throughput: {throughput:.2f} tarefas/s")
-    for sid, st in estados.items():
-        print(f"Servidor {sid} utilização: {(st['busy']/total)*100:.1f}%")
+    throughput = len(tarefas) / total_time
+
+    utilizacao = (
+        sum(st["busy"] for st in estados.values()) /
+        (total_time * len(estados)) * 100
+    )
+
+    print("\n" + "-" * 60)
+    print("Resumo Final:")
+    print(f"Tempo médio de resposta: {tempo_medio:.2f}s")
+    print(f"Utilização média da CPU: {utilizacao:.1f}%")
+    print(f"Throughput: {throughput:.2f} tarefas/segundo")
     print("-" * 60)
 
     for q in filas.values():
         q.put("EXIT")
-
-    return {"tempo_medio": avg, "throughput": throughput, "utilizacao": util}
-
-
-def main():
-    cfg = carregar_config()
-
-    politicas = {
-        "RR": "rr",
-        "SJF": "sjf",
-        "PRIORIDADE": "prioridade"
-    }
-
-    resultados = {nome: executar_politica(pol, cfg) for nome, pol in politicas.items()}
-
-    print("\n" + "=" * 60)
-    print("                  RESUMO FINAL")
-    print("=" * 60)
-    print("+-------------+--------------+-------------+------------+")
-    print("| Algoritmo   | Tempo Médio  | Throughput  | Utilização |")
-    print("+-------------+--------------+-------------+------------+")
-
-    for nome, r in resultados.items():
-        print("| {:11} | {:12} | {:11} | {:10.1f}% |".format(
-            nome, f"{r['tempo_medio']:.2f}s", f"{r['throughput']:.2f}/s", r["utilizacao"]
-        ))
-
-    print("+-------------+--------------+-------------+------------+")
-
-    print("\nResumo Geral:")
-    print(f"Tempo médio geral: {sum(r['tempo_medio'] for r in resultados.values())/3:.2f}s")
-    print(f"Throughput médio: {sum(r['throughput'] for r in resultados.values())/3:.2f} tarefas/s")
-    print(f"Utilização média da CPU simulada: {sum(r['utilizacao'] for r in resultados.values())/3:.1f}%")
-    print("-" * 60)
-    print("TODAS AS POLÍTICAS FORAM SIMULADAS.")
+    for p in procs:
+        p.join()
 
 
 if __name__ == "__main__":
-    main()
+    cfg = carregar_config()
+    executar("rr", cfg)

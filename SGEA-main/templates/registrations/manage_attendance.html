@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Gerenciar Presenças - {{ event.title }}</h2>
+
+<div class="alert alert-info">
+    <strong>Instruções:</strong> Marque os participantes que compareceram ao evento.
+    Os certificados serão gerados automaticamente para os presentes.
+</div>
+
+<form method="post">
+    {% csrf_token %}
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Presente</th>
+                <th>Participante</th>
+                <th>Email</th>
+                <th>Certificado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for registration in registrations %}
+            <tr>
+                <td>
+                    <input type="checkbox" name="attended" value="{{ registration.id }}" {{
+                        registration.attended|yesno:"checked," }}>
+                </td>
+                <td>{{ registration.user.get_full_name|default:registration.user.username }}</td>
+                <td>{{ registration.user.email }}</td>
+                <td>
+                    {% if registration.certificate %}
+                    <span class="badge bg-success">Gerado</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Pendente</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="text-center">Nenhuma inscrição encontrada.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="mt-3">
+        <button type="submit" class="btn btn-primary">Salvar Presenças e Gerar Certificados</button>
+        <a href="{% url 'event_detail' event.id %}" class="btn btn-secondary">Voltar</a>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>{{ event.title }}</h2>
+
+{% if event.banner %}
+<div class="mb-4">
+  <img src="{{ event.banner.url }}" alt="{{ event.title }}" class="img-fluid rounded"
+    style="max-height: 400px; width: 100%; object-fit: cover;">
+</div>
+{% endif %}
+
+<p><b>Tipo:</b> {{ event.get_event_type_display }}</p>
+<p><b>Local:</b> {{ event.place }}</p>
+<p><b>Data de início:</b> {{ event.start_date }}</p>
+<p><b>Data de término:</b> {{ event.end_date }}</p>
+<p><b>Professor Responsável:</b> {{ event.organizer.get_full_name|default:event.organizer.username }}</p>
+
+{% if user.is_authenticated %}
+{% if user.profile.role == 'organizador' %}
+<div class="mt-3 d-flex gap-2">
+  <a class="btn btn-sm btn-outline-primary" href="{% url 'report_event_regs' event.id %}">
+    Ver inscritos (relatório)
+  </a>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'report_event_regs_csv' event.id %}">
+    Baixar CSV
+  </a>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'report_event_regs_pdf' event.id %}">
+    Baixar PDF
+  </a>
+  <a class="btn btn-sm btn-warning" href="{% url 'manage_attendance' event.id %}">
+    Gerenciar Presenças
+  </a>
+</div>
+{% else %}
+{% if not already_registered %}
+<form method="post" action="{% url 'enroll' event.id %}">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-success mt-3">Inscrever-se</button>
+</form>
+{% else %}
+<div class="mt-3">
+  <p class="text-success d-inline">Você já está inscrito neste evento.</p>
+  <a href="{% url 'cancel_enrollment' event.id %}" class="btn btn-sm btn-outline-danger ms-2">Cancelar Inscrição</a>
+</div>
+{% if user_certificate %}
+<a href="{% url 'download_certificate' user_certificate.id %}" class="btn btn-success mt-3">
+  <i class="bi bi-award"></i> Baixar Certificado
+</a>
+{% endif %}
+{% endif %}
+{% endif %}
+{% else %}
+<p>Faça <a href="{% url 'login' %}">login</a> para se inscrever.</p>
+{% endif %}
+{% endblock %}

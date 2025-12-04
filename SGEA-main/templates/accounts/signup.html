@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>Criar conta</h3>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button class="btn btn-success">Registrar</button>
+</form>
+<p class="text-muted small mt-2">Instituição é obrigatória para alunos e professores.</p>
+{% endblock %}
