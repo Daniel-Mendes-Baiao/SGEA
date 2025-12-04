@@ -33,48 +33,56 @@ def register_participant(request):
     
     return render(request, 'accounts/register_participant.html', {'form': form})
 
+from django.db import transaction
+
 def signup(request):
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            profile = user.profile
-            
-            # Generate confirmation token
-            token = profile.generate_confirmation_token()
-            
-            # Build confirmation link
-            confirmation_link = request.build_absolute_uri(f'/accounts/confirm/{token}/')
-            
-            # Render email template
-            html_content = render_to_string('emails/welcome_email.html', {
-                'user_name': user.get_full_name() or user.username,
-                'confirmation_link': confirmation_link,
-                'confirmation_token': token,
-            })
-            
-            # Send email
-            subject = 'Bem-vindo ao SGEA - Confirme seu e-mail'
-            from_email = settings.DEFAULT_FROM_EMAIL
-            to_email = user.email
-            
-            email = EmailMultiAlternatives(subject, '', from_email, [to_email])
-            email.attach_alternative(html_content, "text/html")
-            
-            # Attach logo
             try:
-                with open(settings.BASE_DIR / 'static' / 'sgea_logo.jpg', 'rb') as f:
-                    email.attach('sgea_logo.jpg', f.read(), 'image/jpeg')
-                    email.content_subtype = 'html'
-                    email.mixed_subtype = 'related'
-                    email.attach_alternative(html_content.replace('cid:logo', 'cid:sgea_logo.jpg'), "text/html")
-            except:
-                pass  # If logo not found, send without it
-            
-            email.send()
-            
-            messages.success(request, 'Cadastro realizado! Verifique seu e-mail para confirmar sua conta.')
-            return redirect('login')
+                with transaction.atomic():
+                    user = form.save()
+                    profile = user.profile
+                    
+                    # Generate confirmation token
+                    token = profile.generate_confirmation_token()
+                    
+                    # Build confirmation link
+                    confirmation_link = request.build_absolute_uri(f'/accounts/confirm/{token}/')
+                    
+                    # Render email template
+                    html_content = render_to_string('emails/welcome_email.html', {
+                        'user_name': user.get_full_name() or user.username,
+                        'confirmation_link': confirmation_link,
+                        'confirmation_token': token,
+                    })
+                    
+                    # Send email
+                    subject = 'Bem-vindo ao SGEA - Confirme seu e-mail'
+                    from_email = settings.DEFAULT_FROM_EMAIL
+                    to_email = user.email
+                    
+                    email = EmailMultiAlternatives(subject, '', from_email, [to_email])
+                    email.attach_alternative(html_content, "text/html")
+                    
+                    # Attach logo
+                    try:
+                        with open(settings.BASE_DIR / 'static' / 'logo.jpg', 'rb') as f:
+                            email.attach('logo.jpg', f.read(), 'image/jpeg')
+                            email.content_subtype = 'html'
+                            email.mixed_subtype = 'related'
+                            email.attach_alternative(html_content.replace('cid:logo', 'cid:logo.jpg'), "text/html")
+                    except:
+                        pass  # If logo not found, send without it
+                    
+                    email.send()
+                    
+                messages.success(request, 'Cadastro realizado! Verifique seu e-mail para confirmar sua conta.')
+                return redirect('login')
+                
+            except Exception as e:
+                messages.error(request, f'Erro ao realizar cadastro: {str(e)}')
+                # Transaction will rollback automatically
     else:
         form = SignUpForm()
     return render(request, 'accounts/signup.html', {'form': form})

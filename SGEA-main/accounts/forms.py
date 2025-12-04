@@ -34,6 +34,18 @@ class SignUpForm(forms.Form):
         
         return password
 
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if User.objects.filter(username=username).exists():
+            raise forms.ValidationError('Este nome de usuário já está em uso.')
+        return username
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email and User.objects.filter(email=email).exists():
+            raise forms.ValidationError('Este e-mail já está cadastrado.')
+        return email
+
     def clean(self):
         data = super().clean()
         if data.get('password') != data.get('password2'):
